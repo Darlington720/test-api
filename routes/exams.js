@@ -37,31 +37,26 @@ router.get("/student/:stdno", async (req, res) => {
     stu_no: stdno,
   });
 
-payments.sort((a, b) => {
-  // Sort by 'study_yr' first
-  if (a.study_yr < b.study_yr) {
-    return -1;
-  }
-  if (a.study_yr > b.study_yr) {
-    return 1;
-  }
+  payments.sort((a, b) => {
+    // Sort by 'study_yr' first
+    if (a.study_yr < b.study_yr) {
+      return -1;
+    }
+    if (a.study_yr > b.study_yr) {
+      return 1;
+    }
 
-  // If 'study_yr' is the same, sort by 'sem'
-  if (a.sem < b.sem) {
-    return -1;
-  }
-  if (a.sem > b.sem) {
-    return 1;
-  }
+    // If 'study_yr' is the same, sort by 'sem'
+    if (a.sem < b.sem) {
+      return -1;
+    }
+    if (a.sem > b.sem) {
+      return 1;
+    }
 
-  // If both 'study_yr' and 'sem' are equal, maintain the original order
-  return 0;
-});
-
-
-
-
-
+    // If both 'study_yr' and 'sem' are equal, maintain the original order
+    return 0;
+  });
 
   // active payments - pick the current yr and sem
   if (payments.length > 0) {
@@ -88,16 +83,28 @@ payments.sort((a, b) => {
     )
     .andWhere("students_in_exam_room.stu_no", "=", stdno);
   // .groupBy("course_unit_code");
-	//console.log("payments", payments)
+  //console.log("payments", payments)
   //exemptions
   const studentExemptions = await database
     .select("*")
     .from("exemptions")
     .where("stdno", "=", stdno);
 
+  const enrolledModules = await database
+    .select("*")
+    .from("student_enrollment_categories")
+    .join(
+      "student_enrolled_modules",
+      "student_enrollment_categories.sec_id",
+      "student_enrolled_modules.cat_id"
+    )
+    .where("student_enrollment_categories.stdno", "=", stdno)
+    .andWhere("student_enrollment_categories.study_yr", "=", year)
+    .andWhere("student_enrollment_categories.sem", "=", sem);
+
   if (!course_units_did_by_student[0]) {
-//	console.log("year", year);
-//	console.log("sem", sem);
+    //	console.log("year", year);
+    //	console.log("sem", sem);
     return res.send({
       success: true,
       result: {
@@ -107,6 +114,7 @@ payments.sort((a, b) => {
         current_sem: sem,
         registration_status,
         student_cus: studentExemptions,
+        enrolledModules,
       },
     });
   }
@@ -132,6 +140,7 @@ payments.sort((a, b) => {
           current_sem: sem,
           registration_status,
           student_cus: [...student_cus, ...studentExemptions],
+          enrolledModules,
         },
       });
     })
@@ -794,6 +803,112 @@ router.post("/exemption", async (req, res) => {
   res.send({
     success: true,
     message: "student exempted successfully",
+  });
+});
+
+router.get("/students", async (req, res) => {
+  let year;
+  let sem;
+  let arr = [];
+
+  const allStudents = await database
+    .select("stdno", "progcode", "study_yr", "current_sem")
+    .from("students_biodata");
+
+  const x = allStudents.map(async (stu) => {
+    year = stu.study_yr;
+    sem = stu.current_sem;
+    const payments = await database
+      .select("*")
+      .from("student_paid_fess")
+      .where({
+        stu_no: stu.stdno,
+      });
+
+    payments.sort((a, b) => {
+      // Sort by 'study_yr' first
+      if (a.study_yr < b.study_yr) {
+        return -1;
+      }
+      if (a.study_yr > b.study_yr) {
+        return 1;
+      }
+
+      // If 'study_yr' is the same, sort by 'sem'
+      if (a.sem < b.sem) {
+        return -1;
+      }
+      if (a.sem > b.sem) {
+        return 1;
+      }
+
+      // If both 'study_yr' and 'sem' are equal, maintain the original order
+      return 0;
+    });
+
+    if (payments.length > 0) {
+      year = payments[payments.length - 1].study_yr;
+      sem = payments[payments.length - 1].sem;
+    }
+
+    arr.push({ ...stu, year, sem });
+  });
+
+  Promise.all(x)
+    .then(() => {
+      res.send({
+        allStudents: arr,
+      });
+    })
+    .catch((err) => {
+      res.send({
+        error: "Error" + err,
+      });
+    });
+});
+
+router.post("/save_enrolled_modules", async (req, res) => {
+  const { stdno, current_sem, study_yr, modules } = req.body;
+  console.log("received this", req.body);
+  const existingCategory = await database
+    .select("*")
+    .from("student_enrollment_categories")
+    .where({
+      stdno,
+      study_yr,
+      sem: current_sem,
+    });
+
+  if (existingCategory[0]) {
+    return res.send({
+      success: true,
+      message: "already have the modules",
+    });
+  }
+
+  const newCategory = await database("student_enrollment_categories").insert({
+    stdno,
+    study_yr,
+    sem: current_sem,
+  });
+
+  const fieldsToInsert = modules.map((field, index) => {
+    return {
+      cat_id: newCategory[0],
+      module_code: field.module_code,
+      module_title: field.module_title,
+      module_level: field.module_level,
+      credit_units: field.credit_units,
+      module_year: field.module_year,
+      module_sem: field.module_sem,
+    };
+  });
+
+  await database("student_enrolled_modules").insert(fieldsToInsert);
+
+  res.send({
+    success: true,
+    message: "modules saved successfully",
   });
 });
 

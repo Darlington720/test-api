@@ -58,6 +58,27 @@ router.get("/student/:studentNo", authenticateSession, (req, res) => {
                 .then((payment_percentages) => {
                   let regStatus = "Not Registered";
 
+                  payment_percentages.sort((a, b) => {
+                    // Sort by 'study_yr' first
+                    if (a.study_yr < b.study_yr) {
+                      return -1;
+                    }
+                    if (a.study_yr > b.study_yr) {
+                      return 1;
+                    }
+
+                    // If 'study_yr' is the same, sort by 'sem'
+                    if (a.sem < b.sem) {
+                      return -1;
+                    }
+                    if (a.sem > b.sem) {
+                      return 1;
+                    }
+
+                    // If both 'study_yr' and 'sem' are equal, maintain the original order
+                    return 0;
+                  });
+
                   // if (
                   //   payment_percentages.length === 0 ||
                   //   payment_percentages[payment_percentages.length - 1]
@@ -142,6 +163,26 @@ router.get("/student/:studentNo", authenticateSession, (req, res) => {
             .then((payment_percentages) => {
               let regStatus = "Not Registered";
 
+              payment_percentages.sort((a, b) => {
+                // Sort by 'study_yr' first
+                if (a.study_yr < b.study_yr) {
+                  return -1;
+                }
+                if (a.study_yr > b.study_yr) {
+                  return 1;
+                }
+
+                // If 'study_yr' is the same, sort by 'sem'
+                if (a.sem < b.sem) {
+                  return -1;
+                }
+                if (a.sem > b.sem) {
+                  return 1;
+                }
+
+                // If both 'study_yr' and 'sem' are equal, maintain the original order
+                return 0;
+              });
               // if (
               //   payment_percentages.length === 0 ||
               //   payment_percentages[payment_percentages.length - 1]
@@ -232,6 +273,27 @@ router.get("/student/:studentNo", authenticateSession, (req, res) => {
                 })
                 .then((payment_percentages) => {
                   let regStatus = "Not Registered";
+
+                  payment_percentages.sort((a, b) => {
+                    // Sort by 'study_yr' first
+                    if (a.study_yr < b.study_yr) {
+                      return -1;
+                    }
+                    if (a.study_yr > b.study_yr) {
+                      return 1;
+                    }
+
+                    // If 'study_yr' is the same, sort by 'sem'
+                    if (a.sem < b.sem) {
+                      return -1;
+                    }
+                    if (a.sem > b.sem) {
+                      return 1;
+                    }
+
+                    // If both 'study_yr' and 'sem' are equal, maintain the original order
+                    return 0;
+                  });
 
                   payment_percentages.map((payment) => {
                     if (studentEnrollmentForTheCurrentSession[0]) {

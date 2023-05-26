@@ -466,22 +466,78 @@ app.post("/api/importExceltodb", async (req, res) => {
                 }
 
                 // After, go for the existing ones
-                const updatePromises = existingStudents.map((existingRow) => {
-                  return database("student_paid_fess")
-                    .where({
-                      stu_no: existingRow.stu_no,
-                      study_yr: existingRow.study_yr,
-                      sem: existingRow.sem,
-                    })
-                    .update(existingRow);
-                });
+                // const updatePromises = existingStudents.map(
+                //   async (existingRow) => {
+                //     return await database("student_paid_fess")
+                //       .where({
+                //         stu_no: existingRow.stu_no,
+                //         study_yr: existingRow.study_yr,
+                //         sem: existingRow.sem,
+                //       })
+                //       .update(existingRow);
+                //   }
+                // );
 
-                return Promise.all(updatePromises).then(() => {
-                  res.status(200).send({
-                    success: true,
-                    message: "Updated the fields Successfully",
+                // const updatePromises = existingStudents.map(
+                //   async (existingRow) => {
+                //     console.log("Working on this", existingRow);
+                //     return database.transaction(async (trx) => {
+                //       await trx("student_paid_fess")
+                //         .where({
+                //           stu_no: existingRow.stu_no,
+                //           study_yr: existingRow.study_yr,
+                //           sem: existingRow.sem,
+                //         })
+                //         .update(existingRow);
+                //     });
+                //   }
+                // );
+
+                // Promise.all(updatePromises)
+                //   .then(() => {
+                //     res.status(200).send({
+                //       success: true,
+                //       message: "Updated the fields Successfully",
+                //     });
+                //   })
+                //   .catch((err) => {
+                //     res.status(500).send({
+                //       success: false,
+                //       message: "An error occurred during the updates",
+                //       error: err.message,
+                //     });
+                //   });
+
+                const updatePromises = [];
+
+                for (const existingRow of existingStudents) {
+                  updatePromises.push(
+                    database.transaction(async (trx) => {
+                      await trx("student_paid_fess")
+                        .where({
+                          stu_no: existingRow.stu_no,
+                          study_yr: existingRow.study_yr,
+                          sem: existingRow.sem,
+                        })
+                        .update(existingRow);
+                    })
+                  );
+                }
+
+                Promise.all(updatePromises)
+                  .then(() => {
+                    res.status(200).send({
+                      success: true,
+                      message: "Updated the fields successfully",
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).send({
+                      success: false,
+                      message: "An error occurred during the updates",
+                      error: err.message,
+                    });
                   });
-                });
               }
             });
         } catch (error) {
@@ -490,6 +546,7 @@ app.post("/api/importExceltodb", async (req, res) => {
             success: false,
             message:
               "The files sent are too many, kindly remove some files and try again",
+            error: error.message,
           });
         }
 
