@@ -90,17 +90,27 @@ router.get("/student/:stdno", async (req, res) => {
     .from("exemptions")
     .where("stdno", "=", stdno);
 
+  console.log("course units did in room", course_units_did_by_student);
+
+  // const enrolledModules = await database
+  //   .select("*")
+  //   .from("student_enrollment_categories")
+  //   .join(
+  //     "student_enrolled_modules",
+  //     "student_enrollment_categories.sec_id",
+  //     "student_enrolled_modules.cat_id"
+  //   )
+  //   .where("student_enrollment_categories.stdno", "=", stdno)
+  //   .andWhere("student_enrollment_categories.study_yr", "=", year)
+  //   .andWhere("student_enrollment_categories.sem", "=", sem);
+
   const enrolledModules = await database
+    // .orderBy("id")
     .select("*")
-    .from("student_enrollment_categories")
-    .join(
-      "student_enrolled_modules",
-      "student_enrollment_categories.sec_id",
-      "student_enrolled_modules.cat_id"
-    )
-    .where("student_enrollment_categories.stdno", "=", stdno)
-    .andWhere("student_enrollment_categories.study_yr", "=", year)
-    .andWhere("student_enrollment_categories.sem", "=", sem);
+    .from("modules")
+    .where({
+      module_code: student[0].progcode,
+    });
 
   if (!course_units_did_by_student[0]) {
     //	console.log("year", year);
@@ -869,7 +879,7 @@ router.get("/students", async (req, res) => {
 
 router.post("/save_enrolled_modules", async (req, res) => {
   const { stdno, current_sem, study_yr, modules } = req.body;
-  console.log("received this", req.body);
+  // console.log("received this", req.body);
   const existingCategory = await database
     .select("*")
     .from("student_enrollment_categories")
