@@ -1,6 +1,6 @@
 const baseIp = "192.168.43.59";
 var knex = require("knex");
-const port = 9000;
+const port = 9002;
 
 // const database = knex({
 //   client: "mysql",

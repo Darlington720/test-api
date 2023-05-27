@@ -823,6 +823,8 @@ router.get("/students", async (req, res) => {
 
   const allStudents = await database
     .select("stdno", "progcode", "study_yr", "current_sem")
+    .limit(5)
+    .offset(0)
     .from("students_biodata");
 
   const x = allStudents.map(async (stu) => {
@@ -890,6 +892,7 @@ router.post("/save_enrolled_modules", async (req, res) => {
     });
 
   if (existingCategory[0]) {
+    console.log("already have the modules", stdno);
     return res.send({
       success: true,
       message: "already have the modules",
@@ -915,7 +918,7 @@ router.post("/save_enrolled_modules", async (req, res) => {
   });
 
   await database("student_enrolled_modules").insert(fieldsToInsert);
-
+  console.log("new group inserted", stdno);
   res.send({
     success: true,
     message: "modules saved successfully",
