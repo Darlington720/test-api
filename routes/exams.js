@@ -90,27 +90,27 @@ router.get("/student/:stdno", async (req, res) => {
     .from("exemptions")
     .where("stdno", "=", stdno);
 
-  console.log("course units did in room", course_units_did_by_student);
-
-  // const enrolledModules = await database
-  //   .select("*")
-  //   .from("student_enrollment_categories")
-  //   .join(
-  //     "student_enrolled_modules",
-  //     "student_enrollment_categories.sec_id",
-  //     "student_enrolled_modules.cat_id"
-  //   )
-  //   .where("student_enrollment_categories.stdno", "=", stdno)
-  //   .andWhere("student_enrollment_categories.study_yr", "=", year)
-  //   .andWhere("student_enrollment_categories.sem", "=", sem);
+  // console.log("course units did in room", course_units_did_by_student);
 
   const enrolledModules = await database
-    // .orderBy("id")
     .select("*")
-    .from("modules")
-    .where({
-      module_code: student[0].progcode,
-    });
+    .from("student_enrollment_categories")
+    .join(
+      "student_enrolled_modules",
+      "student_enrollment_categories.sec_id",
+      "student_enrolled_modules.cat_id"
+    )
+    .where("student_enrollment_categories.stdno", "=", stdno)
+    .andWhere("student_enrollment_categories.study_yr", "=", year)
+    .andWhere("student_enrollment_categories.sem", "=", sem);
+
+  // const enrolledModules = await database
+  //   // .orderBy("id")
+  //   .select("*")
+  //   .from("modules")
+  //   .where({
+  //     module_code: student[0].progcode,
+  //   });
 
   if (!course_units_did_by_student[0]) {
     //	console.log("year", year);
@@ -905,20 +905,21 @@ router.post("/save_enrolled_modules", async (req, res) => {
     sem: current_sem,
   });
 
-  const fieldsToInsert = modules.map((field, index) => {
-    return {
-      cat_id: newCategory[0],
-      module_code: field.module_code,
-      module_title: field.module_title,
-      module_level: field.module_level,
-      credit_units: field.credit_units,
-      module_year: field.module_year,
-      module_sem: field.module_sem,
-    };
-  });
-
-  await database("student_enrolled_modules").insert(fieldsToInsert);
-  console.log("new group inserted", stdno);
+  if (modules[0]) {
+    const fieldsToInsert = modules.map((field, index) => {
+      return {
+        cat_id: newCategory[0],
+        module_code: field.module_code,
+        module_title: field.module_title,
+        module_level: field.module_level,
+        credit_units: field.credit_units,
+        module_year: field.module_year,
+        module_sem: field.module_sem,
+      };
+    });
+    await database("student_enrolled_modules").insert(fieldsToInsert);
+    console.log("new group inserted", stdno);
+  }
   res.send({
     success: true,
     message: "modules saved successfully",

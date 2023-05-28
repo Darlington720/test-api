@@ -12,6 +12,7 @@
     "nodemon": "^2.0.6"
   },
   "dependencies": {
+    "apisauce": "^3.0.0",
     "bcrypt-nodejs": "0.0.3",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
