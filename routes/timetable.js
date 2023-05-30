@@ -532,4 +532,38 @@ router.post("/classTT", async (req, res) => {
   res.send(result);
 });
 
+router.post("/save_new_module", async (req, res) => {
+  console.log("the module received", req.body);
+  const existingModule = await database
+    .select("*")
+    .where({
+      course_name: req.body.courseName.toUpperCase(),
+      school_id: req.body.school.value,
+    })
+    .from("modules");
+
+  if (existingModule[0]) {
+    return res.send({
+      success: false,
+      message: `The course unit already exists in the ${req.body.school.label}`,
+    });
+  }
+
+  // insert the data provided
+  const result = await database("modules").insert({
+    course_id: req.body.courseID,
+    course_name: req.body.courseName.toUpperCase(),
+    course_code: req.body.courseCode,
+    module_level: req.body.moduleLevel.value,
+    study_yr: req.body.studyYr.value,
+    sem: req.body.sem.value,
+    school_id: req.body.school.value,
+  });
+
+  return res.send({
+    success: true,
+    message: "Module saved Successfully",
+  });
+});
+
 module.exports = router;

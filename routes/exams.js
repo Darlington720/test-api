@@ -4,6 +4,21 @@ const router = express.Router();
 const multer = require("multer");
 const { database } = require("../config");
 
+let active_session = {
+  "sec-ch-ua":
+    '"Not_A Brand";v="99", "Google Chrome";v="109", "Chromium";v="109"',
+  "Content-Type": "application/json",
+  "X-Requested-With": "XMLHttpRequest",
+  "sec-ch-ua-mobile": "?0",
+  "User-Agent":
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+  "sec-ch-ua-platform": '"Linux"',
+  Accept: "*/*",
+  host: "student.nkumbauniversity.ac.ug",
+  Cookie:
+    "ai=30303466666331366165303036653839656439333164363737336335356164327C7C6E6B756D6261; as=34343735303266366464333532353164636335356664623966646234623131667C7C31363030313033313333; asc=52e1ddc82b9d9009aaf2ae1e6073246f; ast=be66522e-7e42-4cc9-8c7e-0b7f2d5f9c93-1685312697; dp=62376564373862352D653961312D346632322D623735662D6538646632306337306364667C7C323032332D30352D32377E323032332D30352D32387E323032332D30352D3239; inst=6E6B756D6261; rt=62376564373862352D653961312D346632322D623735662D653864663230633730636466; st=31363030313033313333; tk=464d5cc36f919fa2d60f2631d0c1379211a9455eb41593db3c2c9212674f2410",
+};
+
 // Configure multer to store uploaded files in a desired location
 const storage = multer.diskStorage({
   destination: path.resolve(__dirname, "..", "upload/evidence"),
@@ -13,8 +28,9 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-router.get("/student/:stdno", async (req, res) => {
-  const { stdno } = req.params;
+router.post("/student", async (req, res) => {
+  const { stdno, room_id, session_id } = req.body;
+  console.log("received", req.body);
   let year;
   let sem;
   let student_cus = [];
@@ -92,25 +108,54 @@ router.get("/student/:stdno", async (req, res) => {
 
   // console.log("course units did in room", course_units_did_by_student);
 
-  const enrolledModules = await database
-    .select("*")
-    .from("student_enrollment_categories")
-    .join(
-      "student_enrolled_modules",
-      "student_enrollment_categories.sec_id",
-      "student_enrolled_modules.cat_id"
-    )
-    .where("student_enrollment_categories.stdno", "=", stdno)
-    .andWhere("student_enrollment_categories.study_yr", "=", year)
-    .andWhere("student_enrollment_categories.sem", "=", sem);
-
   // const enrolledModules = await database
-  //   // .orderBy("id")
   //   .select("*")
-  //   .from("modules")
-  //   .where({
-  //     module_code: student[0].progcode,
-  //   });
+  //   .from("student_enrollment_categories")
+  //   .join(
+  //     "student_enrolled_modules",
+  //     "student_enrollment_categories.sec_id",
+  //     "student_enrolled_modules.cat_id"
+  //   )
+  //   .where("student_enrollment_categories.stdno", "=", stdno)
+  //   .andWhere("student_enrollment_categories.study_yr", "=", year)
+  //   .andWhere("student_enrollment_categories.sem", "=", sem);
+
+  const exams = await database
+    .select("course_unit_code", "course_unit_name")
+    .from("exam_timetable")
+    .where({
+      room_id,
+      session_id,
+      date:
+        new Date(req.body.date).getFullYear() +
+        "-" +
+        (new Date(req.body.date).getMonth() + 1) +
+        "-" +
+        new Date(req.body.date).getDate(),
+    });
+
+  // console.log("units in room", exams);
+
+  const enrolledModules = await database
+    // .orderBy("id")
+    .select("*")
+    .from("modules")
+    .where({
+      course_code: student[0].progcode,
+    });
+
+  let arr = [];
+
+  // combine the two
+  enrolledModules.forEach((m) => {
+    exams.forEach((e) => {
+      if (m.course_name == e.course_unit_name) {
+        arr.push(m);
+      }
+    });
+  });
+
+  // console.log("supposed to do", arr);
 
   if (!course_units_did_by_student[0]) {
     //	console.log("year", year);
@@ -125,9 +170,11 @@ router.get("/student/:stdno", async (req, res) => {
         registration_status,
         student_cus: studentExemptions,
         enrolledModules,
+        supposed_to_do: arr,
       },
     });
   }
+
   const x = course_units_did_by_student.map(async (cu) => {
     const booklets = await database
       .select("*")
@@ -151,6 +198,7 @@ router.get("/student/:stdno", async (req, res) => {
           registration_status,
           student_cus: [...student_cus, ...studentExemptions],
           enrolledModules,
+          supposed_to_do: arr,
         },
       });
     })
@@ -233,8 +281,8 @@ router.post("/api/saveRegisteredModule", (req, res) => {
         .select("*")
         .from("courseunits_in_exam_rooms")
         .where({
-          module_code: req.body.module_code,
-          module_title: req.body.module_title,
+          course_code: req.body.module_code,
+          course_name: req.body.module_title,
           room_id: req.body.room_id,
           session_id: req.body.session_id,
           assigned_date: assignedDate,
@@ -243,8 +291,8 @@ router.post("/api/saveRegisteredModule", (req, res) => {
           if (data.length == 0) {
             database("courseunits_in_exam_rooms")
               .insert({
-                module_code: req.body.module_code,
-                module_title: req.body.module_title,
+                course_code: req.body.module_code,
+                course_name: req.body.module_title,
                 room_id: req.body.room_id,
                 session_id: req.body.session_id,
                 assigned_date: assignedDate,
@@ -294,12 +342,33 @@ router.post("/examHandin", async (req, res) => {
 });
 
 router.post("/addStudentBookletNos", async (req, res) => {
-  // const { room, invigilators, session, date, status, assigned_by } = req.body;
   console.log("Data Received", req.body);
   const { stu_no, bookletNos, course_unit_name, course_code, ed_id, staff_id } =
     req.body;
   let existingUnit_id;
   let existingStuInRoom_id;
+
+  // want to add  a unit to the timetable if the user sends a new one.
+  if (req.body.notIn2desExams) {
+    // first am getting the group id
+    const existingTimetableGroup = await database
+      .select("*")
+      .from("exam_timetable")
+      .where({
+        date: req.body.room_details.date,
+        room_id: req.body.room_details.room_id,
+        session_id: req.body.room_details.session_id,
+      });
+
+    const newModuleInTT = await database("exam_timetable").insert({
+      exam_group_id: existingTimetableGroup[0].exam_group_id,
+      date: req.body.room_details.date,
+      session_id: req.body.room_details.session_id,
+      room_id: req.body.room_details.room_id,
+      course_unit_code: req.body.course_code,
+      course_unit_name: req.body.course_unit_name,
+    });
+  }
 
   // first we are going to save the required data in course_units_in_exam_room
   const existingUnit = await database
@@ -307,15 +376,15 @@ router.post("/addStudentBookletNos", async (req, res) => {
     .from("courseunits_in_exam_rooms")
     .where({
       ed_id,
-      module_code: course_code,
-      module_title: course_unit_name,
+      course_code: course_code,
+      course_name: course_unit_name,
     });
 
   if (!existingUnit[0]) {
     const insertResult = await database("courseunits_in_exam_rooms").insert({
       ed_id,
-      module_code: course_code,
-      module_title: course_unit_name,
+      course_code: course_code,
+      course_name: course_unit_name,
     });
     existingUnit_id = insertResult[0];
   } else {
@@ -473,7 +542,7 @@ router.get("/examsDidInRoom/:ed_id", async (req, res) => {
 
     num_of_students.push({
       id: cu.cunit_in_ex_room_id,
-      module_title: cu.module_title,
+      module_title: cu.course_name,
       studentCount,
     });
   });
@@ -923,6 +992,37 @@ router.post("/save_enrolled_modules", async (req, res) => {
   res.send({
     success: true,
     message: "modules saved successfully",
+  });
+});
+
+router.get("/active_session", async (req, res) => {
+  // const existingSession = await database
+  //   .select("*")
+  //   .from("external_active_session");
+
+  res.send({
+    success: true,
+    session: active_session,
+  });
+});
+
+router.post("/save_active_session", async (req, res) => {
+  console.log("the body", req.body);
+  // const existingCategory = await database("external_active_session")
+  //   .where({
+  //     eas_id: req.body.eas_id,
+  //   })
+  //   .update({
+  //     handed_in: 1,
+  //     time_handin: d.toLocaleTimeString(),
+  //     date_handin: formatedDate,
+  //   });
+
+  active_session = req.body;
+
+  res.send({
+    success: true,
+    message: "updated successfully",
   });
 });
 
