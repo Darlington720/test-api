@@ -3,7 +3,7 @@ const path = require("path");
 const router = express.Router();
 const fs = require("fs");
 const moment = require("moment");
-const { database } = require("../config");
+const { database, getCurrentSession } = require("../config");
 
 router.get("/image/:id", (req, res) => {
   const { id } = req.params;
@@ -24,8 +24,13 @@ router.get("/image/:id", (req, res) => {
   });
 });
 
-router.post("/lecturerCourseunits/", (req, res) => {
+router.post("/lecturerCourseunits/", async (req, res) => {
   const { lecturer_id, day, l_date } = req.body;
+
+  const currentSession = await getCurrentSession();
+
+  console.log("current session", currentSession);
+  console.log("the details", req.body);
   //console.log("data from ", req.params);
   const d = new Date();
   const date = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
@@ -67,7 +72,7 @@ router.post("/lecturerCourseunits/", (req, res) => {
     .where({
       day_id: day,
     })
-    // .where("day_id", "=", req.body.day)
+    .where("s_id", currentSession.us_id)
 
     //.join("course_units", "timetable.c_unit_id", "=", "course_units.course_id")
 
@@ -114,6 +119,7 @@ router.post("/lecturerCourseunits/", (req, res) => {
     // .andWhere("stu_selected_course_units.stu_id", "=", req.body.stu_no)
     .orderBy("lecture_sessions.start_time")
     .then((lec) => {
+      console.log("the lecs", lec);
       const data = lec.map((obj) => {
         const newObj = Object.assign({}, obj, {
           school: obj.alias,

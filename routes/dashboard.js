@@ -2,6 +2,248 @@ const express = require("express");
 const router = express.Router();
 const moment = require("moment");
 const { database, baseIp, port } = require("../config");
+const _ = require("lodash");
+const { convertDateFormat } = require("../convertDateFormat");
+
+router.get("/staff_gate_attendance/:month/:year", async (req, res) => {
+  const { month, year } = req.params;
+  // const year = 2023;
+  // const month = 6;
+
+  console.log("params", {
+    year,
+    month,
+  });
+  const staff = await database("staff");
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const formattedDates = [];
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month - 1, day);
+    const formattedDate = convertDateFormat(date.toLocaleDateString());
+    formattedDates.push(formattedDate);
+  }
+
+  const presenceData = await database("staff_signin")
+    .whereIn("signin_date", formattedDates)
+    .whereIn(
+      "staff_id",
+      staff.map((member) => member.staff_id)
+    );
+
+  const data = staff.map((member) => {
+    const memberPresence = presenceData.filter(
+      (presence) => presence.staff_id === member.staff_id
+    );
+    for (const presence of memberPresence) {
+      presence.signin_date = convertDateFormat(
+        new Date(presence.signin_date).toLocaleDateString()
+      );
+    }
+    return { ...member, datesPresent: memberPresence };
+  });
+
+  res.send(data);
+});
+
+router.get("/lecture_report_reqs", async (req, res) => {
+  const campus = await database("campus");
+  const schools = await database("schools");
+
+  res.send({
+    success: true,
+    result: {
+      campus,
+      schools,
+    },
+  });
+});
+
+router.post("/lecture_report/", async (req, res) => {
+  const { school_id, campus, year, sem, month } = req.body;
+
+  // const school_id = 2;
+  // const campus = 1;
+  // const sem = 1;
+  // const year = 2023;
+  // const month = 4;
+
+  console.log("received this", req.body);
+  // const year = 2023;
+  // const month = 6;
+
+  // console.log("params", {
+  //   year,
+  //   month,
+  // });
+  // const staff = await database("staff");
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const formattedDates = [];
+  const daysInFormattedDates = [];
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month - 1, day);
+    const formattedDate = convertDateFormat(date.toLocaleDateString());
+    formattedDates.push(formattedDate);
+    daysInFormattedDates.push({ day: date.getDay(), date: formattedDate });
+  }
+
+  //all lectures in the specified month
+  const tt_groups = await database("timetable_groups").where({
+    school_id,
+    campus,
+    year,
+    sem,
+  });
+
+  console.log("days in formatted dates", daysInFormattedDates);
+
+  // console.log("the groups", tt_groups);
+
+  // all lecturers that have lectures in the specified year, sem and school
+  const lecturers = await database("lecture_timetable")
+    .select("staff.*")
+    .join("staff", "lecture_timetable.lecturer_id", "staff.staff_id")
+    .whereIn(
+      "day_id",
+      daysInFormattedDates.map((_d) => _d.day)
+    )
+    .whereIn(
+      "timetable_group_id",
+      tt_groups.map((gr) => gr.tt_gr_id)
+    )
+    .groupBy("lecturer_id");
+
+  // first get all the lectures
+  const allLectures = await database("lecture_timetable")
+    // .leftJoin("lectures", function () {
+    //   this.on("lecture_timetable.tt_id", "=", "lectures.l_tt_id").andOn(
+    //     "lectures.l_month",
+    //     "=",
+    //     month
+    //   );
+    // })
+    .leftJoin(
+      "lecture_sessions",
+      "lecture_timetable.session_id",
+      "lecture_sessions.ls_id"
+    )
+    .whereIn(
+      "day_id",
+      daysInFormattedDates.map((_d) => _d.day)
+    )
+    .whereIn(
+      "timetable_group_id",
+      tt_groups.map((gr) => gr.tt_gr_id)
+    );
+  // .select(
+  //   "lecture_timetable.*",
+  //   "lectures.*",
+  //   "lecture_sessions.*",
+  //   "daysInFormattedDates.date" // Include the date from the array
+  // );
+
+  // Attach the date to each row in the results
+  const lecturesWithDate = daysInFormattedDates.map((formatedDate) => {
+    // console.log("all lectures", allLectures);
+    const lecs = _.filter(allLectures, { day_id: formatedDate.day.toString() });
+
+    const lecsWithDate = lecs.map((lecture) => ({
+      ...lecture,
+      date: formatedDate.date,
+    }));
+
+    return lecsWithDate;
+  });
+
+  const mergedLectures = [].concat(...lecturesWithDate);
+
+  // console.log("lectures with date", mergedLectures);
+
+  // const startedLectures = await database("lectures").whereIn(
+  //   "date",
+  //   mergedLectures.map((ld) => ld.date)
+  // );
+
+  const startedLecturesWithStudents = await database("lectures")
+    .whereIn(
+      "date",
+      mergedLectures.map((ld) => ld.date)
+    )
+    .select("*")
+    .then(async (lectures) => {
+      const lecturesWithStudents = await Promise.all(
+        lectures.map(async (lecture) => {
+          const enrolledStudents = await database("stu_selected_course_units")
+            .count("stu_id as count")
+            .where({ course_id: lecture.course_unit_id });
+
+          const presentStudents = await database("lecture_members")
+            .count("member_id as count")
+            .where({ date: lecture.date, lecture_id: lecture.course_unit_id });
+
+          return {
+            ...lecture,
+            presentStudents,
+            enrolledStudents,
+          };
+        })
+      );
+
+      return lecturesWithStudents;
+    });
+
+  // console.log("started lectures", startedLectures.length);
+
+  const joinedLectures = mergedLectures.map((lectureWithDate) => {
+    const matchingStartedLecture = startedLecturesWithStudents.find(
+      (startedLecture) =>
+        startedLecture.l_tt_id === lectureWithDate.tt_id &&
+        convertDateFormat(
+          new Date(startedLecture.date).toLocaleDateString()
+        ) === lectureWithDate.date
+    );
+
+    if (matchingStartedLecture) {
+      return {
+        ...lectureWithDate,
+        ...matchingStartedLecture,
+        date: lectureWithDate.date,
+        // Replace with the actual field you want to add
+      };
+    }
+
+    return lectureWithDate;
+  });
+
+  // console.log("joined lectures", joinedLectures);
+
+  // const lecturesWithDate = allLectures.map((lecture) => {
+  //   const matchingDayInfo = daysInFormattedDates.find(
+  //     (dayInfo) => dayInfo.day === lecture.day_id
+  //   );
+  //   return {
+  //     ...lecture,
+  //     date: matchingDayInfo.date,
+  //   };
+  // });
+
+  const data = lecturers.map((member) => {
+    const lectures = joinedLectures.filter(
+      (lecture) => lecture.lecturer_id === member.staff_id
+    );
+
+    // console.log("lectures", lectures);
+    // for (const presence of memberPresence) {
+    //   presence.signin_date = convertDateFormat(
+    //     new Date(presence.signin_date).toLocaleDateString()
+    //   );
+    // }
+    return { ...member, lectures: lectures };
+  });
+
+  res.send(data);
+});
 
 router.get("/main_dashboard/:campus_id", async (req, res) => {
   const { campus_id } = req.params;

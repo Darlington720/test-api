@@ -210,6 +210,55 @@ router.post("/student", async (req, res) => {
     });
 });
 
+router.get("/exam_report_reqs", async (req, res) => {
+  const schools = await database("schools");
+  const campus = await database("campus");
+  const year_sem = await database("year_sem");
+
+  res.send({
+    success: true,
+    result: {
+      schools,
+      campus,
+      year_sem,
+    },
+  });
+});
+
+router.post("/exam_report", async (req, res) => {
+  const { start_date, end_date, school_id, campus, yr_sem_id } = req.body;
+
+  // First, am getting the examinations in the specified date based on the timetable
+  const exams = await database("exam_timetable")
+    .join(
+      "exam_groups",
+      "exam_timetable.exam_group_id",
+      "=",
+      "exam_groups.exam_group_id"
+    )
+    .leftJoin("exam_details", function () {
+      this.on("exam_details.room_id", "=", "exam_timetable.room_id")
+        .andOn("exam_details.session_id", "=", "exam_timetable.session_id")
+        .andOn("exam_details.date", "=", "exam_timetable.date");
+    })
+    .where("exam_groups.school_id", 1)
+    .andWhere("exam_groups.campus_id", "MAIN")
+    .andWhere("exam_groups.yr_sem_id", 1)
+    .whereBetween("exam_timetable.date", ["2023-05-16", "2023-05-18"])
+    .select(
+      "exam_timetable.*",
+      "exam_details.assigned_by",
+      "exam_details.started_at",
+      "exam_details.ended_at",
+      "exam_details.ended_by",
+      "exam_groups.*"
+    );
+
+  // console.log("exams", exams);
+
+  res.send(exams);
+});
+
 router.post("/end_room_session", async (req, res) => {
   const { ed_id, staff_id } = req.body;
 

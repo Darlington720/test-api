@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { database, baseIp, port } = require("../config");
+const { database, getCurrentSession } = require("../config");
 
 router.get("/lectureTimetable", (req, res) => {
   database
@@ -282,6 +282,8 @@ router.post("/addClassTimetable", async (req, res) => {
   const d = new Date();
   const date = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 
+  const currentSession = await getCurrentSession();
+
   const existingTimetableGroup = await database
     .select("*")
     .where({
@@ -317,6 +319,7 @@ router.post("/addClassTimetable", async (req, res) => {
     room_id: field.room.value,
     c_unit_id: field.courseUnit.value.course_code,
     course_unit_name: field.courseUnit.value.course_name,
+    s_id: currentSession.us_id,
   }));
 
   let insertSuccess = true;

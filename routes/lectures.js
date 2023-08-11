@@ -2,7 +2,7 @@ const express = require("express");
 var knex = require("knex");
 const router = express.Router();
 const _ = require("lodash");
-const { database } = require("../config");
+const { database, getCurrentSession } = require("../config");
 
 const { sendPushNotifications } = require("../pushNotifications");
 
@@ -332,8 +332,9 @@ router.get("/lecture/:lecture_id", (req, res) => {
   //   });
 });
 
-router.get("/getEnrolledStudents/:course_id", (req, res) => {
+router.get("/getEnrolledStudents/:course_id", async (req, res) => {
   const { course_id } = req.params;
+  const currentSession = await getCurrentSession();
   //console.log("enrollment sent records", req.params);
   const d = new Date();
   const date = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
@@ -354,6 +355,8 @@ router.get("/getEnrolledStudents/:course_id", (req, res) => {
       "users.userfull_name",
       "users.role"
     )
+    .where("stu_selected_course_units.session_id", currentSession.us_id)
+
     .where(function () {
       if (course_id.includes("-")) {
         this.where("stu_selected_course_units.course_id", "=", course_id);

@@ -20,12 +20,25 @@ const database = knex({
     host: "localhost",
     user: "root",
     password: "",
-    database: "nkumba",
+    database: "nkumba_uni",
   },
 });
+
+const getCurrentSession = async () => {
+  const allSessions = await database
+    .select("*")
+    .from("university_sessions")
+    .orderBy("us_id", "desc")
+    .limit(1);
+
+  const currentSession = allSessions[0];
+
+  return currentSession;
+};
 
 module.exports = {
   baseIp,
   port,
   database,
+  getCurrentSession,
 };

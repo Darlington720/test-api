@@ -1,8 +1,9 @@
 const express = require("express");
 const router = express.Router();
 var knex = require("knex");
+var _ = require("lodash");
 const moment = require("moment");
-const { database, baseIp, port } = require("../config");
+const { database, getCurrentSession } = require("../config");
 
 router.get(`/studentBiodata/:stdno`, (req, res) => {
   const { stdno } = req.params;
@@ -120,13 +121,18 @@ router.post("/saveStudentEnrollment", async (req, res) => {
   }
 });
 
-router.get("/mySelectedCourseUnits/:stu_no", (req, res) => {
+router.get("/mySelectedCourseUnits/:stu_no", async (req, res) => {
   const { stu_no } = req.params;
+  const currentSession = await getCurrentSession();
   // console.log("new", stu_no);
 
   database
     .select("*")
     .from("stu_selected_course_units")
+    .where({
+      stu_id: stu_no,
+      session_id: currentSession.us_id,
+    })
     // .join("modules", function () {
     //   this.on(
     //     "stu_selected_course_units.course_id",
@@ -160,9 +166,11 @@ router.get("/mySelectedCourseUnits/:stu_no", (req, res) => {
   //   });
 });
 
-router.post("/myCourseUnitsTodayDashboard/", (req, res) => {
+router.post("/myCourseUnitsTodayDashboard/", async (req, res) => {
   const d = new Date();
   const date = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+
+  const currentSession = await getCurrentSession();
 
   database
     .from("lecture_timetable")
@@ -187,7 +195,7 @@ router.post("/myCourseUnitsTodayDashboard/", (req, res) => {
     .where("day_id", "=", req.body.day)
     .andWhere("schools.alias", "=", req.body.school)
     .andWhere("study_time.study_time_name", "=", req.body.study_time)
-    // .where("day_id", "=", req.body.day)
+    .where("s_id", "=", currentSession.us_id)
 
     //.join("course_units", "timetable.c_unit_id", "=", "course_units.course_id")
     .join(
@@ -291,7 +299,7 @@ router.post("/myCourseUnitsTodayDashboard/", (req, res) => {
     });
 });
 
-router.post("/myCourseUnitsToday/", (req, res) => {
+router.post("/myCourseUnitsToday/", async (req, res) => {
   // const { lectures } = req.params;
   // let arr = lectures.split(",");
   // console.log(lectures.split(","));
@@ -299,6 +307,11 @@ router.post("/myCourseUnitsToday/", (req, res) => {
   // console.log("is Array result", Array.isArray(req.body));
   // console.log("the body", req.body);
   // console.log("from the client ", req.body.day);
+
+  const currentSession = await getCurrentSession();
+
+  // console.log("session ", currentSession);
+
   const d = new Date();
   const date = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
   // console.log(d.getDay());
@@ -346,6 +359,7 @@ router.post("/myCourseUnitsToday/", (req, res) => {
 
     .where("day_id", "=", req.body.day)
     .andWhere("schools.alias", "=", req.body.school)
+    .andWhere("lecture_timetable.s_id", "=", currentSession.us_id)
     // .andWhere("study_time.study_time_name", "=", req.body.study_time)
     // .join(
     //   "stu_selected_course_units",
@@ -385,7 +399,7 @@ router.post("/myCourseUnitsToday/", (req, res) => {
     // .andWhere("stu_selected_course_units.stu_id", "=", req.body.stu_no)
     // .orderBy("start_time")
     .then(async (lec) => {
-      // console.log("lec from db", lec);
+      console.log("lec from db", lec);
       const data = lec.map((obj) => {
         const newObj = Object.assign({}, obj, {
           school: obj.alias,
@@ -529,6 +543,7 @@ router.post("/myCourseUnitsToday/", (req, res) => {
 
 router.get(`/allCourseUnits/:course_code`, (req, res) => {
   const { course_code } = req.params;
+
   database
     // .orderBy("id")
     .select("*")
@@ -536,6 +551,7 @@ router.get(`/allCourseUnits/:course_code`, (req, res) => {
     .where({
       course_code: course_code,
     })
+    .orWhere("status", 1)
     .then((data) => {
       res.send(data);
     });
@@ -545,27 +561,49 @@ router.post("/addSelectedCourseUnit", async (req, res) => {
   const { stu_no, course_id, course_name, course_code, original_course_id } =
     req.body;
   let status = false;
+
+  const currentSession = await getCurrentSession();
+
+  console.log("current session", currentSession);
   // console.log("sent course unit", req.body);
   const studentSelectedCourseUnits = await database
     .from("stu_selected_course_units")
-    .where(function () {
-      this.where("stu_id", "=", stu_no);
+    .where({
+      stu_id: stu_no,
+      session_id: currentSession.us_id,
     })
     .select("*");
 
-  studentSelectedCourseUnits.forEach((courseUnit) => {
-    if (
-      courseUnit.course_id === course_id ||
-      courseUnit.course_id === original_course_id
-    ) {
-      res.send(
-        `${courseUnit.course_name} already added, Please Choose another one`
-      );
-      status = true;
-    }
-  });
+  // const existingCu = _.find(studentSelectedCourseUnits, {
+  //   course_id: course_id || original_course_id,
+  // });
 
-  if (status === true) return;
+  console.log("Students", studentSelectedCourseUnits);
+  const existingCu = studentSelectedCourseUnits.find(
+    (item) => item.course_id === (course_id || original_course_id)
+  );
+
+  // console.log("existing", existingCu);
+
+  if (existingCu) {
+    return res.send(
+      `${existingCu.course_name} already added, Please Choose another one`
+    );
+  }
+
+  // studentSelectedCourseUnits.forEach((courseUnit) => {
+  //   if (
+  //     courseUnit.course_id === course_id ||
+  //     courseUnit.course_id === original_course_id
+  //   ) {
+  //     res.send(
+  //       `${courseUnit.course_name} already added, Please Choose another one`
+  //     );
+  //     status = true;
+  //   }
+  // });
+
+  // if (status === true) return;
 
   if (studentSelectedCourseUnits.length >= 8) {
     return res.send("Maximum number of course units selected");
@@ -578,16 +616,17 @@ router.post("/addSelectedCourseUnit", async (req, res) => {
     })
     .select("*");
 
-  if (timetable.length > 0) {
-    const result = await database("stu_selected_course_units").insert({
-      stu_id: stu_no,
-      course_id: original_course_id,
-      course_name: course_name,
-      course: course_code,
-    });
+  // if (timetable.length > 0) {
+  //   const result = await database("stu_selected_course_units").insert({
+  //     stu_id: stu_no,
+  //     course_id: original_course_id,
+  //     course_name: course_name,
+  //     course: course_code,
+  //     session_id: currentSession.us_id,
+  //   });
 
-    return res.send("Course Unit added Successfully");
-  }
+  //   return res.send("Course Unit added Successfully");
+  // }
 
   database("stu_selected_course_units")
     .insert({
@@ -595,6 +634,7 @@ router.post("/addSelectedCourseUnit", async (req, res) => {
       course_id: course_id,
       course_name: course_name,
       course: course_code,
+      session_id: currentSession.us_id,
     })
     .then((data) => {
       res.send("Course Unit added Successfully");
