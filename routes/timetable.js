@@ -53,6 +53,45 @@ router.get("/lectureTimetable", (req, res) => {
     });
 });
 
+router.post("/lecture_timetable", async (req, res) => {
+  const { school_id, study_time_id, campus, sem, year } = req.body;
+  // i need to check the time tablegroups
+  const tt_group = await database("timetable_groups")
+    .where({
+      school_id,
+      study_time_id,
+      campus,
+      sem,
+      year,
+    })
+    .first();
+
+  if (!tt_group) {
+    return res.send({
+      success: true,
+      result: [],
+    });
+  }
+
+  const timetable = await database("lecture_timetable")
+    .join(
+      "lecture_sessions",
+      "lecture_timetable.session_id",
+      "lecture_sessions.ls_id"
+    )
+    .join("staff", "lecture_timetable.lecturer_id", "staff.staff_id")
+    .join("rooms", "lecture_timetable.room_id", "rooms.room_id")
+    .where({
+      timetable_group_id: tt_group.tt_gr_id,
+    })
+    .orderBy("lecture_sessions.ls_id");
+
+  res.send({
+    success: true,
+    result: timetable,
+  });
+});
+
 router.post("/addExamTimetable", async (req, res) => {
   const { headers, timetable } = req.body;
   // console.log("Data received", req.body);
@@ -176,6 +215,47 @@ router.post("/addExamTimetable", async (req, res) => {
   }
 });
 
+router.post("/edit_lecture_tt", async (req, res) => {
+  const { timetable } = req.body;
+
+  // console.log("body", timetable);
+
+  const update_tt = await database("lecture_timetable")
+    .where({
+      tt_id: timetable[0].tt_id,
+    })
+    .update({
+      day_id: timetable[0].selectedDay,
+      session_id: timetable[0].selectedSession,
+      lecturer_id: timetable[0].lecturer,
+      room_id: timetable[0].room,
+      c_unit_id: timetable[0].courseUnit.course_id,
+      course_unit_name: timetable[0].courseUnit.course_name,
+    });
+
+  res.send({
+    success: true,
+    message: "Timetable Updated Successfully",
+  });
+});
+
+router.delete("/delete_tt_cu/:tt_id", async (req, res) => {
+  const { tt_id } = req.params;
+
+  // console.log("body", timetable);
+
+  const delete_cu = await database("lecture_timetable")
+    .where({
+      tt_id: tt_id,
+    })
+    .del();
+
+  res.send({
+    success: true,
+    message: "CourseUnit Deleted Successfully",
+  });
+});
+
 router.post("/examsInRoom", async (req, res) => {
   const exams = await database
     .select("course_unit_code", "course_unit_name")
@@ -200,6 +280,8 @@ router.post("/examsInRoom", async (req, res) => {
 router.get("/requirements/class_tt", async (req, res) => {
   const schools = await database.select("*").from("schools");
 
+  // const campus = await database("campus");
+
   const staff_members = await database.select("*").from("staff");
 
   const study_times = await database.select("*").from("study_time");
@@ -219,6 +301,36 @@ router.get("/requirements/class_tt", async (req, res) => {
       modules,
       sessions,
       rooms,
+      // campus,
+    },
+  });
+});
+
+router.get("/reqs/class_tt", async (req, res) => {
+  const schools = await database.select("*").from("schools");
+
+  const campus = await database("campus");
+
+  const staff_members = await database.select("*").from("staff");
+
+  const study_times = await database.select("*").from("study_time");
+
+  const modules = await database.select("*").from("modules");
+
+  const sessions = await database.select("*").from("lecture_sessions");
+
+  const rooms = await database.select("*").from("rooms");
+
+  res.send({
+    success: true,
+    result: {
+      schools,
+      staff_members,
+      study_times,
+      modules,
+      sessions,
+      rooms,
+      campus,
     },
   });
 });
@@ -287,22 +399,22 @@ router.post("/addClassTimetable", async (req, res) => {
   const existingTimetableGroup = await database
     .select("*")
     .where({
-      school_id: headers.school.value,
-      study_time_id: headers.studyTime.value,
-      campus: headers.campus.value,
-      sem: headers.sem.value,
-      year: headers.year.value,
+      school_id: headers.school_id,
+      study_time_id: headers.study_time_id,
+      campus: headers.campus,
+      sem: headers.sem,
+      year: headers.year,
     })
     .from("timetable_groups");
 
   let timetableGroupId;
   if (existingTimetableGroup.length === 0) {
     const [timetableGroup] = await database("timetable_groups").insert({
-      school_id: headers.school.value,
-      study_time_id: headers.studyTime.value,
-      campus: headers.campus.value,
-      sem: headers.sem.value,
-      year: headers.year.value,
+      school_id: headers.school_id,
+      study_time_id: headers.study_time_id,
+      campus: headers.campus,
+      sem: headers.sem,
+      year: headers.year,
     });
     timetableGroupId = timetableGroup;
   } else {
@@ -313,16 +425,17 @@ router.post("/addClassTimetable", async (req, res) => {
 
   const fieldsToInsert = timetable.map((field) => ({
     timetable_group_id: timetableGroupId,
-    day_id: field.day.value,
-    session_id: field.session.value,
-    lecturer_id: field.lecturer.value,
-    room_id: field.room.value,
-    c_unit_id: field.courseUnit.value.course_code,
-    course_unit_name: field.courseUnit.value.course_name,
+    day_id: field.selectedDay,
+    session_id: field.selectedSession,
+    lecturer_id: field.lecturer,
+    room_id: field.room,
+    c_unit_id: field.courseUnit.course_id,
+    course_unit_name: field.courseUnit.course_name,
     s_id: currentSession.us_id,
   }));
 
   let insertSuccess = true;
+  let duplicates = [];
   let message;
   for (const field of fieldsToInsert) {
     const result = await database
@@ -334,7 +447,8 @@ router.post("/addClassTimetable", async (req, res) => {
           return database("lecture_timetable").insert(field);
         } else {
           insertSuccess = false;
-          message = `Two course units cannot have the same name in the same day - ${field.course_unit_name}`;
+          duplicates.push(field.course_unit_name);
+          message = `Two course units cannot have the same name in the same day`;
         }
       });
   }
@@ -345,9 +459,10 @@ router.post("/addClassTimetable", async (req, res) => {
       message: "Successfully uploaded the timetable",
     });
   } else {
-    res.status(500).send({
+    res.status(400).send({
       success: false,
       message: message,
+      duplicates,
     });
   }
 });
