@@ -29,8 +29,8 @@ router.post("/lecturerCourseunits/", async (req, res) => {
 
   const currentSession = await getCurrentSession();
 
-  console.log("current session", currentSession);
-  console.log("the details", req.body);
+  // console.log("current session", currentSession);
+  // console.log("the details", req.body);
   //console.log("data from ", req.params);
   const d = new Date();
   const date = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();

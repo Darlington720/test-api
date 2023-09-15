@@ -399,7 +399,7 @@ router.post("/myCourseUnitsToday/", async (req, res) => {
     // .andWhere("stu_selected_course_units.stu_id", "=", req.body.stu_no)
     // .orderBy("start_time")
     .then(async (lec) => {
-      console.log("lec from db", lec);
+      // console.log("lec from db", lec);
       const data = lec.map((obj) => {
         const newObj = Object.assign({}, obj, {
           school: obj.alias,

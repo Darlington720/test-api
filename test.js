@@ -1,4 +1,5 @@
 const { convertDateFormat } = require("./convertDateFormat");
+const { database } = require("./config");
 
 function generateWeeksAndDatesInMonth(year, month) {
   const weeks = [];
@@ -35,4 +36,36 @@ const month = 8; // August
 
 const weeksAndDatesInMonth = generateWeeksAndDatesInMonth(year, month);
 
-console.log(weeksAndDatesInMonth);
+// console.log(weeksAndDatesInMonth);
+
+const startYear = 2023;
+const startMonth = 1;
+
+let data = [];
+
+function generateFormattedNumber(number) {
+  const year = new Date().getFullYear();
+  const formattedNumber = `23${number.toString().padStart(4, "0")}`;
+  return formattedNumber;
+}
+
+for (let i = 1; i <= 2600; i++) {
+  const formattedNumber = generateFormattedNumber(i);
+  data.push(formattedNumber);
+}
+
+const fieldsToInsert = data.map((field) => ({
+  department: field,
+}));
+
+console.log("final result", fieldsToInsert);
+
+try {
+  database("staff")
+    .insert(fieldsToInsert)
+    .then((result) => {
+      console.log("result", result);
+    });
+} catch (error) {
+  console.log("error", error);
+}

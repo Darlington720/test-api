@@ -34,7 +34,7 @@ const authenticateSession = async (req, res, next) => {
 
 router.post("/login", (req, res) => {
   const { username, password, token } = req.body;
-  // console.log(req.body);
+  console.log(req.body);
   database
     .select("*")
     // .select(["-password", "-access_id", "-access_pwd", "-token"])
@@ -145,7 +145,12 @@ router.post("/login", (req, res) => {
               staff_id: user[0].stu_no,
             })
             .select("*");
-
+          // console.log("user", {
+          //   ...user[0],
+          //   assignedRole: assignedRole[0] ? assignedRole[0] : null,
+          //   imageUrl: `http://${baseIp}:${port}/assets/${user[0].user_image}`,
+          //   active_auth: sessionToken,
+          // });
           res.send({
             ...user[0],
             assignedRole: assignedRole[0] ? assignedRole[0] : null,
@@ -163,23 +168,27 @@ router.post("/login", (req, res) => {
 
 router.post("/saveToken", (req, res) => {
   // console.log("Obj received", req.body);
-  database
-    .select("*")
-    .from("users")
-    .where({
-      id: req.body.user_id,
-    })
-    .update({
-      token: req.body.token,
-    })
-    .then((data2) => {
-      // console.log(`Updated ${req.body.name}'s push token`, data2);
-      res.end();
-    })
-    .catch((err) => {
-      console.log("error in storing token", err);
-      res.end();
-    });
+  if (req.body.token) {
+    database
+      .select("*")
+      .from("users")
+      .where({
+        id: req.body.user_id,
+      })
+      .update({
+        token: req.body.token,
+      })
+      .then((data2) => {
+        // console.log(`Updated ${req.body.name}'s push token`, data2);
+        res.end();
+      })
+      .catch((err) => {
+        console.log("error in storing token", err);
+        res.end();
+      });
+  } else {
+    res.end();
+  }
 });
 
 router.post("/removeToken", (req, res) => {

@@ -17,6 +17,7 @@ const lectures = require("./routes/lectures");
 const exams = require("./routes/exams");
 const uploadRouter = require("./routes/upload");
 const timetable = require("./routes/timetable");
+const graduation = require("./routes/graduation");
 const cors = require("cors");
 const moment = require("moment");
 const {
@@ -30,7 +31,7 @@ const fileUpload = require("express-fileupload");
 const upload = multer();
 const app = express();
 const secret = "mySecret";
-
+app.use(express.json({ limit: "10mb" }));
 app.use(cors());
 app.use(express.static(__dirname + "/public"));
 app.use(express.static(path.join(__dirname, "build")));
@@ -57,6 +58,7 @@ app.use("/api/upload", uploadRouter);
 app.use("/api/timetable", timetable);
 app.use("/api/dashboard", dashboard);
 app.use("/api/exams", exams);
+app.use("/api/graduation", graduation);
 // console.log("my name is", new Date("2022-12-04T23:31:53.000Z").getDate());
 
 let cookies = "";
@@ -965,12 +967,35 @@ const expressServer = app.listen(port, baseIp, () =>
   console.log(`App is running on port ${port}`)
 );
 
-const io = socketio(expressServer);
+const io = socketio(expressServer, {
+  cors: {
+    origin: "*",
+  },
+});
 
 io.on("connection", (socket) => {
   // console.log(`[${socket.id}] socket connected`);
 
   // io.emit("welcome", "Welcome to the socket io server");
+
+  socket.on("hello", (data) => {
+    console.log("data from client", data);
+  });
+
+  socket.on("update_voters", (data) => {
+    console.log("request to update voters", data);
+    io.emit("update_voters_from_server", data);
+  });
+
+  socket.on("update_elligible_voters", (data) => {
+    // console.log("request to update elligible voters", data);
+    io.emit("update_elligible_voters_from_server", data);
+  });
+
+  socket.on("update_elligible_voters_from_upload", (data) => {
+    // console.log("request to update elligible voters", data);
+    io.emit("update_elligible_voters_from_upload_server", data);
+  });
 
   // const clients = await io.in("9").allSockets();
   // console.log("Clients", clients);
